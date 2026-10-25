@@ -189,6 +189,16 @@
       margin-bottom: 4px;
     }
 
+    .char-perk-txt {
+      margin-top: 6px;
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      color: #ffee00;
+      text-shadow: 0 0 6px rgba(255, 238, 0, 0.5);
+      min-height: 0.9em;
+    }
+
     .char-status-badge {
       font-size: 0.72rem;
       padding: 3px 10px;
@@ -568,6 +578,7 @@
             <canvas id="charPreviewCanvas" width="64" height="64"></canvas>
             <div class="char-name-txt" id="char-name-el">NEO CUBE</div>
             <div class="char-status-badge badge-active" id="char-status-el">AKTIV</div>
+            <div class="char-perk-txt" id="char-perk-el"></div>
           </div>
           <button class="nav-arrow-btn" id="char-next-btn" title="Nächster">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -679,8 +690,8 @@
     window.addEventListener('resize', setupRetina);
 
     // Canvas roundRect Polyfill
-    if (!ctx.roundRect) {
-      ctx.roundRect = function(x, y, w, h, r) {
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
         if (!r) r = 0;
         const rad = Math.min(typeof r === 'number' ? r : r[0] || 0, w / 2, h / 2);
         this.beginPath();
@@ -981,6 +992,40 @@
         osc.start(now);
         osc.stop(now + cfg[3]);
       },
+      doubleJump() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(380, now);
+        osc.frequency.exponentialRampToValueAtTime(1100, now + 0.12);
+        gain.gain.setValueAtTime(0.13, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.13);
+      },
+      chrono() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1400, now);
+        osc.frequency.exponentialRampToValueAtTime(160, now + 0.7);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.75);
+      },
       closeCall() {
         if (!audioEnabled) return;
         const ctx = getAudioContext();
@@ -1194,7 +1239,7 @@
         if (this.nextTime < ctx.currentTime - 0.05) this.nextTime = ctx.currentTime + 0.05;
         while (this.nextTime < ctx.currentTime + 0.12) {
           this.playStep(this.step, this.nextTime);
-          const bpm = this.track.bpm * (1 + this.intensity * 0.22);
+          const bpm = this.track.bpm * (1 + this.intensity * 0.22) * (chronoTimer > 0 ? 0.72 : 1);
           this.nextTime += 60 / bpm / 4;
           this.step = (this.step + 1) % 64;
         }
@@ -1208,7 +1253,7 @@
         const s = step % 16;
         const root = tr.root + tr.chords[bar];
         const iv = tr.quality[bar] === 'm' ? [0, 3, 7, 12, 15] : [0, 4, 7, 12, 16];
-        const stepDur = 60 / (tr.bpm * (1 + this.intensity * 0.22)) / 4;
+        const stepDur = 60 / (tr.bpm * (1 + this.intensity * 0.22) * (chronoTimer > 0 ? 0.72 : 1)) / 4;
 
         // Schlagzeug
         if (tr.kick.includes(s)) synthKick(ctx, out, t, 0.5);
@@ -1383,6 +1428,101 @@
       }
     };
 
+    // Chrono Titan: detailliertes Mech-Modell mit Animations-Parametern
+    function drawTitanModel(c, o) {
+      const t = o.t || 0;
+
+      // Antenne mit blinkendem Licht
+      c.strokeStyle = '#00aa44';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(5, -14);
+      c.lineTo(7, -20);
+      c.stroke();
+      c.fillStyle = Math.floor(t / 20) % 2 ? '#ffee00' : '#aaff00';
+      c.beginPath();
+      c.arc(7, -21, 2.2, 0, Math.PI * 2);
+      c.fill();
+
+      // Beine (laufen / eingezogen in der Luft)
+      const legA = o.legA || 0;
+      c.fillStyle = '#00aa44';
+      const lh1 = Math.max(3, Math.min(7, 5 + legA));
+      const lh2 = Math.max(3, Math.min(7, 5 - legA));
+      c.fillRect(-9, 9, 6, o.inAir ? 3 : lh1);
+      c.fillRect(3, 9, 6, o.inAir ? 3 : lh2);
+
+      // Düsenflammen unter den Füßen
+      if (o.thrust > 0) {
+        const len = 5 + o.thrust * 0.35 + Math.random() * 4;
+        c.fillStyle = '#aaff00';
+        c.beginPath();
+        c.moveTo(-9, 12); c.lineTo(-6, 12 + len); c.lineTo(-3, 12);
+        c.moveTo(3, 12); c.lineTo(6, 12 + len); c.lineTo(9, 12);
+        c.fill();
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.moveTo(-8, 12); c.lineTo(-6, 12 + len * 0.5); c.lineTo(-4, 12);
+        c.moveTo(4, 12); c.lineTo(6, 12 + len * 0.5); c.lineTo(8, 12);
+        c.fill();
+      }
+
+      // Körper
+      c.fillStyle = '#00ff66';
+      c.beginPath();
+      c.roundRect(-13, -15, 26, 25, 7);
+      c.fill();
+      c.fillStyle = '#00cc52';
+      c.fillRect(-13, 1, 26, 2);
+
+      // Schulter-Panzer
+      const sw = o.swing || 0;
+      c.fillStyle = '#00aa44';
+      c.beginPath();
+      c.roundRect(-18, -12 + sw, 5, 11, 2);
+      c.fill();
+      c.beginPath();
+      c.roundRect(13, -12 - sw, 5, 11, 2);
+      c.fill();
+
+      // Visier mit scannenden Augen
+      c.fillStyle = '#062b16';
+      c.beginPath();
+      c.roundRect(-10, -12, 20, 9, 3);
+      c.fill();
+      const scan = Math.sin(t * 0.05) * 1.5;
+      c.fillStyle = '#ffee00';
+      if (o.blink > 0) {
+        c.fillRect(-1 + scan, -8, 4, 1);
+        c.fillRect(5 + scan, -8, 4, 1);
+      } else {
+        c.fillRect(-1 + scan, -10, 4, 5);
+        c.fillRect(5 + scan, -10, 4, 5);
+      }
+
+      // Brust-Zahnrad / Uhr
+      const gear = t * (o.gearSpeed || 0.05);
+      c.save();
+      c.translate(0, 5);
+      c.fillStyle = '#e8fffa';
+      for (let k = 0; k < 8; k++) {
+        c.save();
+        c.rotate(gear + k * Math.PI / 4);
+        c.fillRect(-1.2, -6.5, 2.4, 2.5);
+        c.restore();
+      }
+      c.beginPath();
+      c.arc(0, 0, 4.5, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#00aa44';
+      c.lineWidth = 1.4;
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(Math.cos(gear * 2 - Math.PI / 2) * 3.5, Math.sin(gear * 2 - Math.PI / 2) * 3.5);
+      c.stroke();
+      c.restore();
+    }
+
     function currentTheme() {
       return THEMES[selectedCharId] || THEMES.cube;
     }
@@ -1432,6 +1572,7 @@
         charStatusEl.textContent = `AB ${char.unlockAt}M`;
       }
 
+      document.getElementById('char-perk-el').textContent = char.perk ? '★ ' + char.perk : '';
       drawCharPreview(char.id);
     }
 
@@ -1538,27 +1679,10 @@
         prevCtx.fillRect(2, -3, 4, 3);
 
       } else if (charId === 'titan') {
-        prevCtx.shadowBlur = 14;
+        prevCtx.shadowBlur = 10;
         prevCtx.shadowColor = '#00ff66';
-        prevCtx.fillStyle = '#00ff66';
-        prevCtx.beginPath();
-        prevCtx.roundRect(-15, -15, 30, 30, 8);
-        prevCtx.fill();
-
-        prevCtx.fillStyle = '#00aa44';
-        prevCtx.fillRect(-18, -12, 4, 12);
-        prevCtx.fillRect(14, -12, 4, 12);
-
-        prevCtx.fillStyle = '#e8fffa';
-        prevCtx.beginPath();
-        prevCtx.roundRect(-10, -10, 20, 20, 4);
-        prevCtx.fill();
-
-        prevCtx.shadowBlur = 6;
-        prevCtx.shadowColor = '#ffee00';
-        prevCtx.fillStyle = '#ffee00';
-        prevCtx.fillRect(-6, -4, 4, 4);
-        prevCtx.fillRect(2, -4, 4, 4);
+        prevCtx.translate(0, -2);
+        drawTitanModel(prevCtx, { t: 0, gearSpeed: 0.05 });
       }
 
       prevCtx.restore();
@@ -1722,9 +1846,10 @@
       }
 
       update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.life--;
+        const ts = worldTimeScale();
+        this.x += this.vx * ts;
+        this.y += this.vy * ts;
+        this.life -= ts;
 
         // Neon-Partikelschweif (im Performance-Modus seltener)
         if (Math.random() < (lowQuality ? 0.18 : 0.45)) {
@@ -1773,14 +1898,18 @@
         this.y = y;
         this.w = 26;
         this.h = 24;
-        this.vx = (Math.random() < 0.5 ? 1 : -1) * (1.3 + Math.random() * 0.8);
+        // Elite-Fledermaus ab 2200m: schneller, schießt 3er-Fächer
+        this.elite = score >= 2200 && Math.random() < 0.3;
+        const baseSpeed = 1.3 + Math.random() * 0.8;
+        this.vx = (Math.random() < 0.5 ? 1 : -1) * baseSpeed * (this.elite ? 1.35 : 1);
         this.floatTimer = Math.random() * Math.PI * 2;
         this.shootTimer = 100 + Math.random() * 80;
       }
 
       update(playerY, playerX) {
-        this.x += this.vx;
-        this.floatTimer += 0.075;
+        const ts = worldTimeScale();
+        this.x += this.vx * ts;
+        this.floatTimer += 0.075 * ts;
         this.y = this.initialY + Math.sin(this.floatTimer) * 12;
 
         if (this.x <= 15) {
@@ -1792,27 +1921,38 @@
         }
 
         if (score >= 1500) {
-          this.shootTimer--;
+          this.shootTimer -= ts;
           if (this.shootTimer <= 0) {
             // Nur schießen, wenn sichtbar und nicht schon zu viele Geschosse unterwegs sind
             const sy = HEIGHT - (this.y - cameraY);
             const onScreen = sy > 40 && sy < HEIGHT - 40;
-            if (!onScreen || projectiles.length >= MAX_ENEMY_PROJECTILES || enemyShotCooldown > 0) {
+            const roomNeeded = this.elite ? 3 : 1;
+            if (!onScreen || projectiles.length + roomNeeded > MAX_ENEMY_PROJECTILES || enemyShotCooldown > 0) {
               this.shootTimer = 30 + Math.random() * 40;
               return;
             }
-            this.shootTimer = 170 + Math.random() * 90;
+            this.shootTimer = 140 + Math.random() * 70;
 
-            const dx = (playerX + 13) - (this.x + this.w / 2);
-            const dy = (playerY + 15) - this.y;
-            const dist = Math.hypot(dx, dy);
+            const sx = this.x + this.w / 2;
+            const sy0 = this.y;
+            const speed = score >= 2500 ? 4.2 : 3.6;
+            // Zielt dorthin, wo der Spieler gleich sein wird (Vorhalten)
+            const rawDist = Math.hypot(playerX + 13 - sx, playerY + 15 - sy0);
+            const lead = Math.min(40, rawDist / speed);
+            const tx = playerX + 13 + player.vx * lead * 0.8;
+            const ty = playerY + 15 + player.vy * lead * 0.4;
+            const dx = tx - sx;
+            const dy = ty - sy0;
+            const dist = Math.hypot(dx, dy) || 1;
 
-            if (dist < 440) {
-              const speed = 3.0;
-              const vx = (dx / dist) * speed;
-              const vy = (dy / dist) * speed;
-              projectiles.push(new Projectile(this.x + this.w / 2, this.y, vx, vy));
-              enemyShotCooldown = 70;
+            if (rawDist < 440) {
+              const baseAngle = Math.atan2(dy, dx);
+              const angles = this.elite ? [-0.22, 0, 0.22] : [0];
+              for (const off of angles) {
+                const a = baseAngle + off;
+                projectiles.push(new Projectile(sx, sy0, Math.cos(a) * speed, Math.sin(a) * speed));
+              }
+              enemyShotCooldown = 50;
               Sound.enemyShoot();
             }
           }
@@ -1826,18 +1966,30 @@
         const cx = this.x + this.w / 2;
         const cy = screenY - this.h / 2;
 
-        drawGlow('#ff0055', cx, cy, 30);
+        const bodyColor = this.elite ? '#a8002c' : '#ff0055';
+        const wingColor = this.elite ? '#ff1a1a' : '#ff3377';
+        drawGlow(this.elite ? '#ff1a1a' : '#ff0055', cx, cy, this.elite ? 36 : 30);
 
         ctx.save();
         ctx.translate(cx, cy);
+        if (this.elite) ctx.scale(1.2, 1.2);
 
-        ctx.fillStyle = '#ff0055';
+        // Elite: Hörner
+        if (this.elite) {
+          ctx.fillStyle = '#ffee00';
+          ctx.beginPath();
+          ctx.moveTo(-7, -8); ctx.lineTo(-10, -17); ctx.lineTo(-3, -10);
+          ctx.moveTo(7, -8); ctx.lineTo(10, -17); ctx.lineTo(3, -10);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = bodyColor;
         ctx.beginPath();
         ctx.arc(0, 0, 11, 0, Math.PI * 2);
         ctx.fill();
 
         const wingFlap = Math.sin(this.floatTimer * 3.2) * 8;
-        ctx.fillStyle = '#ff3377';
+        ctx.fillStyle = wingColor;
         ctx.beginPath();
         ctx.moveTo(-7, -2);
         ctx.lineTo(-20, -7 + wingFlap);
@@ -1877,8 +2029,18 @@
     }
 
     let enemies = [];
-    const MAX_ENEMY_PROJECTILES = 2;  // max. gleichzeitige Gegner-Geschosse
+    const MAX_ENEMY_PROJECTILES = 3;  // max. gleichzeitige Gegner-Geschosse
     let enemyShotCooldown = 0;        // Mindestabstand zwischen zwei Schüssen
+
+    // Chrono Titan: Zeitlupe
+    let chronoTimer = 0;
+    let chronoCooldown = 0;
+    const CHRONO_DURATION = 60 * 3;   // 3 Sekunden
+    const CHRONO_COOLDOWN = 60 * 25;  // alle 25 Sekunden
+    const CHRONO_SLOW = 0.35;
+    function worldTimeScale() {
+      return chronoTimer > 0 ? CHRONO_SLOW : 1;
+    }
 
     /* --------------------------------------------------------------------------
        Items (Schild & Schuss), Spieler-Schüsse, Laser
@@ -2198,9 +2360,12 @@
         this.tilt = 0;
         this.trail = [];
         this.blink = 0;
+        this.thrust = 0;
+        this.shock = 0;
         // Fähigkeiten
         this.shieldTimer = 0;
         this.shotCharges = 0;
+        this.usedDoubleJump = false;
         this.fireCooldown = 0;
         this.invuln = 0;
       }
@@ -2280,6 +2445,7 @@
             this.squish = 1.35;
             Sound.jump();
             spawnDust(this.x + this.w / 2, this.y, 8, currentTheme().accent);
+            if (selectedCharId === 'titan') this.thrust = 8;
           }
           this.jumpBuffer--;
         }
@@ -2309,12 +2475,14 @@
               this.vy = 0;
               this.isGrounded = true;
               this.standingPlat = plat;
+              this.usedDoubleJump = false;
               this.squish = 0.75;
               spawnDust(this.x + this.w / 2, this.y, 6, plat.color);
 
               // Chrono Titan: schwere Landung mit Stampf-Effekt
               if (selectedCharId === 'titan' && impactVy < -9) {
                 this.squish = 0.58;
+                this.shock = 18;
                 screenShake = Math.max(screenShake, 5);
                 spawnDust(this.x + this.w / 2, this.y, 10, currentTheme().accent);
               }
@@ -2404,6 +2572,17 @@
           // Blinzeln ab und zu
           if (this.blink > 0) this.blink--;
           else if (Math.random() < 0.006) this.blink = 8;
+          if (this.thrust > 0) this.thrust--;
+          if (this.shock > 0) this.shock--;
+          // Nachbilder während der Zeitlupe
+          if (chronoTimer > 0) {
+            if (this.animTime % 3 === 0) {
+              this.trail.push({ x: this.x, y: this.y });
+              if (this.trail.length > 5) this.trail.shift();
+            }
+          } else if (this.trail.length && this.animTime % 3 === 0) {
+            this.trail.shift();
+          }
         }
       }
 
@@ -2436,6 +2615,33 @@
           if (this.isGrounded) cy += Math.sin(this.animTime * 0.12) * 2.5 - 3;
         }
 
+        if (id === 'titan') {
+          // Zeitlupen-Nachbilder
+          for (let i = 0; i < this.trail.length; i++) {
+            const tr = this.trail[i];
+            if (Math.abs(tr.x - this.x) > 100) continue;
+            const tx = tr.x + this.w / 2;
+            const ty = HEIGHT - (tr.y - cameraY) - this.h / 2;
+            ctx.globalAlpha = ((i + 1) / (this.trail.length + 1)) * 0.3;
+            ctx.fillStyle = '#00ff66';
+            ctx.beginPath();
+            ctx.roundRect(tx - 13, ty - 15, 26, 30, 7);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          // Stampf-Schockwelle bei harter Landung
+          if (this.shock > 0) {
+            const k = 1 - this.shock / 18;
+            ctx.globalAlpha = this.shock / 18;
+            ctx.strokeStyle = '#aaff00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(cx, screenY, 10 + k * 40, 3 + k * 9, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+        }
+
         const charDef = CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
         drawGlow(charDef.glow, cx, cy, 34);
 
@@ -2449,6 +2655,10 @@
           const pulse = 1 + Math.sin(this.animTime * 0.15) * 0.04;
           ctx.rotate(this.tilt);
           ctx.scale(pulse * this.facing, pulse);
+        } else if (id === 'titan') {
+          const idle = this.isGrounded && Math.abs(this.vx) < 0.5;
+          const breathe = idle ? 1 + Math.sin(this.animTime * 0.08) * 0.035 : 1;
+          ctx.scale((1 / this.squish) * this.facing, this.squish * breathe);
         } else {
           ctx.scale((1 / this.squish) * this.facing, this.squish);
         }
@@ -2504,30 +2714,16 @@
           ctx.fillRect(6, -3, 4, 3);
 
         } else if (id === 'titan') {
-          ctx.fillStyle = '#00ff66';
-          ctx.beginPath();
-          ctx.roundRect(-14, -15, 28, 30, 8);
-          ctx.fill();
-
-          // Schulter-Panzer wippen beim Laufen
-          const swing = this.isGrounded && Math.abs(this.vx) > 0.5 ? Math.sin(this.animTime * 0.4) * 2 : 0;
-          ctx.fillStyle = '#00aa44';
-          ctx.fillRect(-17, -11 + swing, 4, 12);
-          ctx.fillRect(13, -11 - swing, 4, 12);
-
-          ctx.fillStyle = '#e8fffa';
-          ctx.beginPath();
-          ctx.roundRect(-9, -10, 18, 20, 4);
-          ctx.fill();
-
-          ctx.fillStyle = '#ffee00';
-          if (this.blink > 0) {
-            ctx.fillRect(0, -2, 4, 1);
-            ctx.fillRect(6, -2, 4, 1);
-          } else {
-            ctx.fillRect(0, -4, 4, 4);
-            ctx.fillRect(6, -4, 4, 4);
-          }
+          const walking = this.isGrounded && Math.abs(this.vx) > 0.5;
+          drawTitanModel(ctx, {
+            t: this.animTime,
+            blink: this.blink,
+            swing: walking ? Math.sin(this.animTime * 0.4) * 2 : 0,
+            legA: walking ? Math.sin(this.animTime * 0.45) * 2.5 : 0,
+            inAir: !this.isGrounded,
+            thrust: this.thrust,
+            gearSpeed: chronoTimer > 0 ? 0.35 : 0.05
+          });
 
         } else {
           // Neo Cube (Starter, unverändert)
@@ -2754,7 +2950,7 @@
       update() {
         const speedBonus = Math.min(score * 0.0028, 2.8);
         this.currentSpeed = this.baseSpeed + speedBonus;
-        this.worldY += this.currentSpeed;
+        this.worldY += this.currentSpeed * worldTimeScale();
         this.waveTimer += 0.075;
 
         // Blasen nur spawnen, wenn die Lava überhaupt auf dem Bildschirm ist
@@ -2925,6 +3121,8 @@
       closeCallCount = 0;
       closeCallFlash = 0;
       enemyShotCooldown = 0;
+      chronoTimer = 0;
+      chronoCooldown = 0;
       updatePauseBtn();
     }
 
@@ -2990,7 +3188,8 @@
           closeCallArmed = false;
           triggerCloseCall();
         }
-        if (enemyShotCooldown > 0) enemyShotCooldown--;
+        if (enemyShotCooldown > 0) enemyShotCooldown -= worldTimeScale();
+
 
         const targetCamY = player.y - HEIGHT * 0.42;
         if (targetCamY > cameraY) {
@@ -3188,7 +3387,36 @@
           ctx.fillStyle = th.shot;
           setTextGlow(th.shot, 6);
           ctx.fillText(`SCHUSS x${player.shotCharges}${isTouchDevice ? '' : ' [E]'}`, 18, hy2);
+          hy2 += 16;
         }
+      }
+
+      // Zeitlupe: grüner Schleier + Uhr
+      if (chronoTimer > 0) {
+        const a = Math.min(1, chronoTimer / 30, (CHRONO_DURATION - chronoTimer + 1) / 10);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(0, 255, 120, ${0.09 * a})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.globalAlpha = 0.35 * a;
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 3;
+        const ccx = WIDTH / 2, ccy = HEIGHT / 2, cr = 120;
+        ctx.beginPath();
+        ctx.arc(ccx, ccy, cr, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let k = 0; k < 12; k++) {
+          const ang = k * Math.PI / 6;
+          ctx.beginPath();
+          ctx.moveTo(ccx + Math.cos(ang) * (cr - 10), ccy + Math.sin(ang) * (cr - 10));
+          ctx.lineTo(ccx + Math.cos(ang) * cr, ccy + Math.sin(ang) * cr);
+          ctx.stroke();
+        }
+        const hand = -Math.PI / 2 + (1 - chronoTimer / CHRONO_DURATION) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(ccx, ccy);
+        ctx.lineTo(ccx + Math.cos(hand) * (cr - 20), ccy + Math.sin(hand) * (cr - 20));
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
 
       // Knapp entkommen!
@@ -3230,7 +3458,8 @@
 
         const isUnlock = bannerText.includes('FREIGESCHALTET');
         const isPerf = bannerText.startsWith('PERFORMANCE');
-        const bannerColor = isPerf ? '#00e5ff' : (isUnlock ? '#00ffaa' : '#ff0055');
+        const isChrono = bannerText.startsWith('ZEITLUPE');
+        const bannerColor = isChrono ? '#00ff66' : isPerf ? '#00e5ff' : (isUnlock ? '#00ffaa' : '#ff0055');
 
         ctx.fillStyle = bannerColor;
         setTextGlow(bannerColor, 10);
