@@ -329,7 +329,7 @@
     }
 
     /* Vektor-Audio-Schalter (Reines SVG) */
-    #mute-btn, #music-btn {
+    #mute-btn, #music-btn, #pause-btn {
       position: absolute;
       top: 14px;
       right: 14px;
@@ -348,15 +348,16 @@
       transition: background 0.2s, transform 0.15s, border-color 0.2s;
     }
 
-    #mute-btn:hover, #music-btn:hover {
+    #mute-btn:hover, #music-btn:hover, #pause-btn:hover {
       background: rgba(0, 229, 255, 0.15);
       border-color: #00e5ff;
       transform: scale(1.06);
     }
 
     #music-btn { right: 62px; }
+    #pause-btn { right: 110px; display: none; }
 
-    #mute-btn svg, #music-btn svg {
+    #mute-btn svg, #music-btn svg, #pause-btn svg {
       width: 20px;
       height: 20px;
       stroke: currentColor;
@@ -473,6 +474,17 @@
 <body>
 
   <div id="game-wrapper">
+    <!-- Pause -->
+    <div id="pause-btn" title="Pause">
+      <svg id="svg-pause" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="8" y1="5" x2="8" y2="19"></line>
+        <line x1="16" y1="5" x2="16" y2="19"></line>
+      </svg>
+      <svg id="svg-play" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+        <polygon points="7 4 20 12 7 20 7 4"></polygon>
+      </svg>
+    </div>
+
     <!-- Musik Schalter -->
     <div id="music-btn" title="Musik an/aus">
       <svg id="svg-music-on" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -586,7 +598,7 @@
         STEUERUNG:<br>
         <span class="key-badge">&#9664;</span> <span class="key-badge">&#9654;</span> PFEILTASTEN / <span class="key-badge">A</span> <span class="key-badge">D</span> = BEWEGEN<br>
         <span class="key-badge">LEERTASTE</span> / <span class="key-badge">W</span> = SPRINGEN<br>
-        <span class="key-badge">E</span> = SCHUSS (MIT ITEM)
+        <span class="key-badge">E</span> = SCHUSS (MIT ITEM) &bull; <span class="key-badge">P</span> = PAUSE
       </div>
 
       <div class="badge-features">
@@ -969,6 +981,24 @@
         osc.start(now);
         osc.stop(now + cfg[3]);
       },
+      closeCall() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        [523.25, 783.99, 1046.5, 1567.98].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const start = ctx.currentTime + i * 0.045;
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.14, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.12);
+        });
+      },
       enemyKill() {
         if (!audioEnabled) return;
         const ctx = getAudioContext();
@@ -1227,6 +1257,7 @@
 
     // Musik im Hintergrund pausieren (z.B. Handy gesperrt / App gewechselt)
     document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pauseGame();
       if (!audioCtx) return;
       if (document.hidden) audioCtx.suspend();
       else if (audioEnabled) audioCtx.resume();
@@ -1243,12 +1274,22 @@
       }
       if (e.key.toLowerCase() === 'f' && !e.repeat) showFps = !showFps;
       if (e.key.toLowerCase() === 'e' && !e.repeat && gameState === 'playing') player.fire();
+      if ((e.key.toLowerCase() === 'p' || e.key === 'Escape') && !e.repeat) {
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+        return;
+      }
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
       if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
       if (e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
+        if (gameState === 'paused') {
+          if (!keys.jump) resumeGame();
+          keys.jump = true;
+          return;
+        }
         if (!keys.jump && gameState === 'playing') player.triggerJump();
         keys.jump = true;
-        if (gameState !== 'playing') startGame();
+        if (gameState === 'start' || gameState === 'gameover') startGame();
       }
     });
 
@@ -1264,9 +1305,13 @@
       const press = (e) => {
         e.preventDefault();
         btn.classList.add('active');
+        if (gameState === 'paused') {
+          if (isJump) resumeGame();
+          return;
+        }
         if (isJump && !keys.jump && gameState === 'playing') player.triggerJump();
         keys[keyName] = true;
-        if (gameState !== 'playing') startGame();
+        if (gameState === 'start' || gameState === 'gameover') startGame();
       };
       const release = (e) => {
         e.preventDefault();
@@ -1749,7 +1794,14 @@
         if (score >= 1500) {
           this.shootTimer--;
           if (this.shootTimer <= 0) {
-            this.shootTimer = 150 + Math.random() * 70;
+            // Nur schießen, wenn sichtbar und nicht schon zu viele Geschosse unterwegs sind
+            const sy = HEIGHT - (this.y - cameraY);
+            const onScreen = sy > 40 && sy < HEIGHT - 40;
+            if (!onScreen || projectiles.length >= MAX_ENEMY_PROJECTILES || enemyShotCooldown > 0) {
+              this.shootTimer = 30 + Math.random() * 40;
+              return;
+            }
+            this.shootTimer = 170 + Math.random() * 90;
 
             const dx = (playerX + 13) - (this.x + this.w / 2);
             const dy = (playerY + 15) - this.y;
@@ -1760,6 +1812,7 @@
               const vx = (dx / dist) * speed;
               const vy = (dy / dist) * speed;
               projectiles.push(new Projectile(this.x + this.w / 2, this.y, vx, vy));
+              enemyShotCooldown = 70;
               Sound.enemyShoot();
             }
           }
@@ -1824,6 +1877,8 @@
     }
 
     let enemies = [];
+    const MAX_ENEMY_PROJECTILES = 2;  // max. gleichzeitige Gegner-Geschosse
+    let enemyShotCooldown = 0;        // Mindestabstand zwischen zwei Schüssen
 
     /* --------------------------------------------------------------------------
        Items (Schild & Schuss), Spieler-Schüsse, Laser
@@ -2670,7 +2725,9 @@
         nextItemY = nextPlatformY + 1500 + Math.random() * 1500;
       }
 
-      if (score >= 800 && Math.random() < 0.35) {
+      const enemyChance = score >= 1500 ? 0.24 : 0.35;
+      const maxEnemies = score >= 1500 ? 4 : 6;
+      if (score >= 800 && Math.random() < enemyChance && enemies.length < maxEnemies) {
         const enemyY = nextPlatformY - gapY * 0.5;
         const enemyX = Math.random() * (WIDTH - 80) + 40;
         enemies.push(new Enemy(enemyX, enemyY));
@@ -2770,6 +2827,76 @@
        -------------------------------------------------------------------------- */
     const player = new Player();
 
+    /* --------------------------------------------------------------------------
+       Knapp entkommen!
+       -------------------------------------------------------------------------- */
+    let closeCallArmed = false;
+    let closeCallTimer = 0;
+    let closeCallCount = 0;
+    let closeCallFlash = 0;
+    const CLOSE_CALL_DANGER = 50;   // so nah muss die Lava kommen
+    const CLOSE_CALL_SAFE = 140;    // so weit muss man wieder weg sein
+
+    function triggerCloseCall() {
+      closeCallTimer = 75;
+      closeCallCount++;
+      closeCallFlash = 1;
+      Sound.closeCall();
+      screenShake = Math.max(screenShake, 7);
+      const cx = player.x + player.w / 2;
+      const cy = player.y;
+      const colors = ['#ffcc00', '#ff5500', '#ffffff'];
+      for (let i = 0; i < (lowQuality ? 10 : 22); i++) {
+        const a = Math.random() * Math.PI;
+        const sp = Math.random() * 4 + 2;
+        addParticle(cx, cy, Math.cos(a) * sp, Math.sin(a) * sp, colors[i % 3], Math.random() * 3 + 2.5, 30);
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       Pause
+       -------------------------------------------------------------------------- */
+    const pauseBtn = document.getElementById('pause-btn');
+    const svgPause = document.getElementById('svg-pause');
+    const svgPlay = document.getElementById('svg-play');
+
+    function updatePauseBtn() {
+      pauseBtn.style.display = (gameState === 'playing' || gameState === 'paused') ? 'flex' : 'none';
+      svgPause.style.display = gameState === 'paused' ? 'none' : 'block';
+      svgPlay.style.display = gameState === 'paused' ? 'block' : 'none';
+    }
+
+    function pauseGame() {
+      if (gameState !== 'playing') return;
+      gameState = 'paused';
+      keys.left = keys.right = keys.jump = false;
+      Music.stop(0.15);
+      updatePauseBtn();
+    }
+
+    function resumeGame() {
+      if (gameState !== 'paused') return;
+      gameState = 'playing';
+      accumulator = 0;
+      lastTime = performance.now();
+      Music.start(selectedCharId);
+      updatePauseBtn();
+    }
+
+    pauseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (gameState === 'playing') pauseGame();
+      else if (gameState === 'paused') resumeGame();
+    });
+
+    // Im Pause-Bildschirm irgendwo tippen = weiterspielen
+    canvas.addEventListener('pointerdown', () => {
+      if (gameState === 'paused') resumeGame();
+    });
+
+    // Am PC: Fenster verlassen = Pause
+    window.addEventListener('blur', () => pauseGame());
+
     function startGame() {
       getAudioContext();
       gameState = 'playing';
@@ -2793,12 +2920,19 @@
       updateFireButton();
       Music.intensity = 0;
       Music.start(selectedCharId);
+      closeCallArmed = false;
+      closeCallTimer = 0;
+      closeCallCount = 0;
+      closeCallFlash = 0;
+      enemyShotCooldown = 0;
+      updatePauseBtn();
     }
 
     function triggerGameOver(reason = 'lava') {
       if (gameState === 'gameover') return;
       gameState = 'gameover';
       Music.stop(0.8);
+      updatePauseBtn();
 
       if (reason === 'enemy') {
         Sound.enemyHit();
@@ -2848,6 +2982,15 @@
         const lavaGap = player.y - lava.worldY;
         const musicTarget = Math.max(0, Math.min(1, 1 - (lavaGap - 60) / 360));
         Music.intensity += (musicTarget - Music.intensity) * 0.03;
+
+        // Knapp entkommen: erst sehr nah an der Lava, dann wieder sicher
+        if (lavaGap < CLOSE_CALL_DANGER) {
+          closeCallArmed = true;
+        } else if (closeCallArmed && lavaGap > CLOSE_CALL_SAFE) {
+          closeCallArmed = false;
+          triggerCloseCall();
+        }
+        if (enemyShotCooldown > 0) enemyShotCooldown--;
 
         const targetCamY = player.y - HEIGHT * 0.42;
         if (targetCamY > cameraY) {
@@ -2952,6 +3095,8 @@
         if (screenShake < 0.2) screenShake = 0;
       }
       if (bannerTimer > 0) bannerTimer--;
+      if (closeCallTimer > 0) closeCallTimer--;
+      if (closeCallFlash > 0) closeCallFlash = Math.max(0, closeCallFlash - 0.05);
     }
 
     /* --------------------------------------------------------------------------
@@ -2997,23 +3142,27 @@
       ctx.textAlign = 'left';
       ctx.fillText(`${score} M`, 18, 36);
 
+      // Bestwert links unter dem Score (rechts sind die Buttons)
       ctx.fillStyle = '#ffcc00';
-      setTextGlow('#ffcc00', 8);
-      ctx.font = 'bold 15px "Courier New", monospace, sans-serif';
-      ctx.textAlign = 'right';
-
-      const bestText = `BEST: ${highscore} M`;
-      const hx = WIDTH - 58 - ctx.measureText(bestText).width - 10;
-      const hy = 30;
+      setTextGlow('#ffcc00', 6);
+      ctx.font = 'bold 12px "Courier New", monospace, sans-serif';
+      ctx.textAlign = 'left';
+      const hx = 22;
+      const hy = 50;
       ctx.beginPath();
-      ctx.moveTo(hx, hy - 5);
-      ctx.lineTo(hx + 4, hy);
-      ctx.lineTo(hx, hy + 5);
-      ctx.lineTo(hx - 4, hy);
+      ctx.moveTo(hx, hy - 4);
+      ctx.lineTo(hx + 3.5, hy);
+      ctx.lineTo(hx, hy + 4);
+      ctx.lineTo(hx - 3.5, hy);
       ctx.closePath();
       ctx.fill();
-
-      ctx.fillText(bestText, WIDTH - 58, 35);
+      const bestText = `BEST: ${highscore} M`;
+      ctx.fillText(bestText, 30, 54);
+      if (newRecordAchieved && gameState === 'playing') {
+        ctx.fillStyle = '#00ffaa';
+        setTextGlow('#00ffaa', 6);
+        ctx.fillText('NEU!', 36 + ctx.measureText(bestText).width, 54);
+      }
 
       const lavaDist = Math.max(0, Math.floor((player.y - lava.worldY) / 10));
       const distColor = lavaDist < 18 ? '#ff0055' : (lavaDist < 35 ? '#ffcc00' : '#00e5ff');
@@ -3021,12 +3170,12 @@
       setTextGlow(distColor, 6);
       ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(`LAVA: +${lavaDist}M [${lava.currentSpeed.toFixed(1)}X]`, 18, 54);
+      ctx.fillText(`LAVA: +${lavaDist}M [${lava.currentSpeed.toFixed(1)}X]`, 18, 70);
 
       // Fähigkeiten-Anzeige
-      if (gameState === 'playing') {
+      if (gameState === 'playing' || gameState === 'paused') {
         const th = currentTheme();
-        let hy2 = 72;
+        let hy2 = 88;
         ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'left';
         if (player.shieldTimer > 0) {
@@ -3042,12 +3191,37 @@
         }
       }
 
-      if (newRecordAchieved && gameState === 'playing') {
-        ctx.fillStyle = '#00ffaa';
-        setTextGlow('#00ffaa', 6);
-        ctx.font = 'bold 12px monospace';
+      // Knapp entkommen!
+      if (closeCallFlash > 0) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(255, 190, 0, ${closeCallFlash * 0.22})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+      if (closeCallTimer > 0) {
+        const age = 75 - closeCallTimer;
+        const scale = age < 10 ? 1.7 - age * 0.07 : 1;
+        ctx.globalAlpha = Math.min(1, closeCallTimer / 20);
+        ctx.save();
+        ctx.translate(WIDTH / 2, HEIGHT * 0.3);
+        ctx.scale(scale, scale);
+        ctx.rotate(-0.05);
         ctx.textAlign = 'center';
-        ctx.fillText('[ NEUER REKORD ]', WIDTH / 2 + 30, 54);
+        ctx.font = '900 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.lineWidth = 5;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#ff3300';
+        ctx.shadowBlur = 0;
+        ctx.strokeText('KNAPP ENTKOMMEN!', 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('KNAPP ENTKOMMEN!', 0, 0);
+        if (closeCallCount > 1) {
+          ctx.font = '900 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+          ctx.fillStyle = '#ffcc00';
+          ctx.strokeText(`x${closeCallCount}`, 0, 26);
+          ctx.fillText(`x${closeCallCount}`, 0, 26);
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
       }
 
       if (bannerTimer > 0) {
@@ -3077,6 +3251,19 @@
         ctx.textAlign = 'center';
         ctx.fillText(bannerText, WIDTH / 2, 98);
         ctx.globalAlpha = 1.0;
+      }
+
+      if (gameState === 'paused') {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(4, 5, 10, 0.65)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 38px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillText('PAUSE', WIDTH / 2, HEIGHT * 0.42);
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillText(isTouchDevice ? 'TIPPEN ZUM WEITERSPIELEN' : 'LEERTASTE ODER P ZUM WEITERSPIELEN', WIDTH / 2, HEIGHT * 0.42 + 32);
       }
 
       if (showFps) {
@@ -3148,6 +3335,7 @@
       if (dt > 250) dt = 250; // z.B. nach Tab-Wechsel
 
       accumulator += dt;
+      if (gameState === 'paused') accumulator = 0;
       let steps = 0;
       while (accumulator >= STEP && steps < MAX_STEPS) {
         update();
