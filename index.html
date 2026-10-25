@@ -189,6 +189,32 @@
       margin-bottom: 4px;
     }
 
+    .lang-switch {
+      margin-top: 12px;
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .lang-switch button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      color: #8b92a5;
+      font-weight: 800;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      padding: 4px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .lang-switch button.active {
+      color: #00e5ff;
+      border-color: #00e5ff;
+      background: rgba(0, 229, 255, 0.15);
+    }
+
     .char-perk-txt {
       margin-top: 6px;
       font-size: 0.66rem;
@@ -567,7 +593,7 @@
 
       <!-- Character Selection Panel -->
       <div class="char-select-panel" id="char-select-container">
-        <div class="char-select-header">CHARAKTER WÄHLEN</div>
+        <div class="char-select-header" id="char-select-header">CHARAKTER WÄHLEN</div>
         <div class="char-carousel">
           <button class="nav-arrow-btn" id="char-prev-btn" title="Vorheriger">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -591,11 +617,11 @@
       <!-- Stats Card bei Game Over -->
       <div class="stats-card" id="stats-box" style="display: none;">
         <div class="stat-row">
-          <span class="stat-label">HÖHE:</span>
+          <span class="stat-label" id="lbl-height">HÖHE:</span>
           <span class="stat-val score-val" id="final-score">0 M</span>
         </div>
         <div class="stat-row">
-          <span class="stat-label">REKORD:</span>
+          <span class="stat-label" id="lbl-record">REKORD:</span>
           <span class="stat-val" id="final-highscore">0 M</span>
         </div>
         <div class="stat-cause" id="final-cause">
@@ -605,15 +631,20 @@
 
       <button class="btn" id="start-btn">PLAY</button>
 
-      <div class="controls-hint">
+      <div class="controls-hint" id="controls-hint">
         STEUERUNG:<br>
         <span class="key-badge">&#9664;</span> <span class="key-badge">&#9654;</span> PFEILTASTEN / <span class="key-badge">A</span> <span class="key-badge">D</span> = BEWEGEN<br>
         <span class="key-badge">LEERTASTE</span> / <span class="key-badge">W</span> = SPRINGEN<br>
         <span class="key-badge">E</span> = SCHUSS (MIT ITEM) &bull; <span class="key-badge">P</span> = PAUSE
       </div>
 
-      <div class="badge-features">
+      <div class="badge-features" id="features-badge">
         FEINDE AB 800M &bull; ITEMS: SCHILD &amp; SCHUSS &bull; 4 CHARAKTERE
+      </div>
+
+      <div class="lang-switch" id="lang-switch">
+        <button data-lang="de">DE</button>
+        <button data-lang="en">EN</button>
       </div>
     </div>
   </div>
@@ -629,7 +660,7 @@
           box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;background:#2a0010;color:#ffd0d8;border:1px solid #ff0055;border-radius:10px;padding:10px 12px;font:12px/1.4 monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;';
           (document.body || document.documentElement).appendChild(box);
         }
-        box.textContent += (box.textContent ? '\n' : 'FEHLER (bitte Foto machen):\n') + msg;
+        box.textContent += (box.textContent ? '\n' : 'FEHLER / ERROR (Foto / photo):\n') + msg;
       }
       window.addEventListener('error', function (e) {
         showError((e.message || 'Unbekannter Fehler') + (e.lineno ? ' (Zeile ' + e.lineno + ')' : ''));
@@ -649,6 +680,83 @@
         try { localStorage.setItem(key, value); } catch (e) {}
       }
     };
+
+    /* --------------------------------------------------------------------------
+       Sprachen: Deutsch / Englisch (automatisch nach Gerätesprache)
+       -------------------------------------------------------------------------- */
+    const LANG = {
+      de: {
+        subtitle: 'Klettere nach oben &bull; Entkomme der Lava',
+        chooseChar: 'CHARAKTER WÄHLEN',
+        active: 'AKTIV', select: 'AUSWÄHLEN', lockedAt: n => `AB ${n}M`,
+        height: 'HÖHE:', record: 'REKORD:',
+        causeEnemy: 'KOLLISION MIT FEUER-FLEDERMAUS',
+        causeProjectile: 'GETROFFEN VON PLASMA-GESCHOSS',
+        causeFall: 'ABSTURZ IN DIE TIEFE',
+        causeLava: 'VON DER LAVA VERSCHLUCKT',
+        tryAgain: 'VERSUCHE ES NOCH EINMAL', play: 'PLAY', again: 'NOCH EINE RUNDE',
+        controls: 'STEUERUNG:<br>' +
+          '<span class="key-badge">&#9664;</span> <span class="key-badge">&#9654;</span> PFEILTASTEN / <span class="key-badge">A</span> <span class="key-badge">D</span> = BEWEGEN<br>' +
+          '<span class="key-badge">LEERTASTE</span> / <span class="key-badge">W</span> = SPRINGEN<br>' +
+          '<span class="key-badge">E</span> = SCHUSS (MIT ITEM) &bull; <span class="key-badge">P</span> = PAUSE',
+        features: 'FEINDE AB 800M &bull; ITEMS: SCHILD &amp; SCHUSS &bull; 4 CHARAKTERE',
+        unlocked: n => `FREIGESCHALTET: ${n}!`,
+        batWarn: 'WARNUNG: FEUER-FLEDERMÄUSE GESICHTET!',
+        batShoot: 'ACHTUNG: GEGNER SCHIESSEN JETZT!',
+        noTarget: 'KEIN ZIEL IN REICHWEITE',
+        shieldOn: 'SCHILD AKTIV!',
+        shotReadyTouch: 'SCHUSS BEREIT! (BUTTON)',
+        shotReadyKey: 'SCHUSS BEREIT! (TASTE E)',
+        perf: 'PERFORMANCE-MODUS AKTIV',
+        best: 'BEST', newRec: 'NEU!',
+        shield: n => `SCHILD ${n}S`, shots: n => `SCHUSS x${n}`,
+        closeCall: 'KNAPP ENTKOMMEN!',
+        pause: 'PAUSE', resumeTouch: 'TIPPEN ZUM WEITERSPIELEN', resumeKey: 'LEERTASTE ODER P ZUM WEITERSPIELEN',
+        tPause: 'Pause', tMusic: 'Musik an/aus', tSound: 'Ton an/aus', tPrev: 'Vorheriger', tNext: 'Nächster'
+      },
+      en: {
+        subtitle: 'Climb up &bull; Escape the lava',
+        chooseChar: 'CHOOSE CHARACTER',
+        active: 'ACTIVE', select: 'SELECT', lockedAt: n => `REACH ${n}M`,
+        height: 'HEIGHT:', record: 'BEST:',
+        causeEnemy: 'HIT BY A FIRE BAT',
+        causeProjectile: 'HIT BY A PLASMA SHOT',
+        causeFall: 'YOU FELL INTO THE DEPTHS',
+        causeLava: 'SWALLOWED BY THE LAVA',
+        tryAgain: 'TRY AGAIN', play: 'PLAY', again: 'ONE MORE RUN',
+        controls: 'CONTROLS:<br>' +
+          '<span class="key-badge">&#9664;</span> <span class="key-badge">&#9654;</span> ARROWS / <span class="key-badge">A</span> <span class="key-badge">D</span> = MOVE<br>' +
+          '<span class="key-badge">SPACE</span> / <span class="key-badge">W</span> = JUMP<br>' +
+          '<span class="key-badge">E</span> = SHOOT (WITH ITEM) &bull; <span class="key-badge">P</span> = PAUSE',
+        features: 'ENEMIES FROM 800M &bull; ITEMS: SHIELD &amp; SHOT &bull; 4 CHARACTERS',
+        unlocked: n => `UNLOCKED: ${n}!`,
+        batWarn: 'WARNING: FIRE BATS SPOTTED!',
+        batShoot: 'CAREFUL: ENEMIES SHOOT NOW!',
+        noTarget: 'NO TARGET IN RANGE',
+        shieldOn: 'SHIELD ACTIVE!',
+        shotReadyTouch: 'SHOT READY! (BUTTON)',
+        shotReadyKey: 'SHOT READY! (PRESS E)',
+        perf: 'PERFORMANCE MODE ON',
+        best: 'BEST', newRec: 'NEW!',
+        shield: n => `SHIELD ${n}S`, shots: n => `SHOTS x${n}`,
+        closeCall: 'CLOSE CALL!',
+        pause: 'PAUSED', resumeTouch: 'TAP TO CONTINUE', resumeKey: 'PRESS SPACE OR P TO CONTINUE',
+        tPause: 'Pause', tMusic: 'Music on/off', tSound: 'Sound on/off', tPrev: 'Previous', tNext: 'Next'
+      }
+    };
+
+    function detectLang() {
+      const saved = store.get('lava_escape_lang', '');
+      if (saved === 'de' || saved === 'en') return saved;
+      const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+      return nav.toLowerCase().startsWith('de') ? 'de' : 'en';
+    }
+    let currentLang = detectLang();
+
+    function T(key, arg) {
+      const v = (LANG[currentLang] && LANG[currentLang][key]) ?? LANG.en[key];
+      return typeof v === 'function' ? v(arg) : v;
+    }
 
     /* ==========================================================================
        LAVA FLOOR ESCAPE - Mobile-optimierte Vector Engine
@@ -1547,7 +1655,8 @@
           unlockedChars.push(ch.id);
           saveCharData();
           Sound.unlockChar();
-          bannerText = `FREIGESCHALTET: ${ch.name}!`;
+          bannerText = T('unlocked', ch.name);
+          bannerColor = '#00ffaa';
           bannerTimer = 180;
           screenShake = 10;
         }
@@ -1563,13 +1672,13 @@
 
       if (isSelected) {
         charStatusEl.className = 'char-status-badge badge-active';
-        charStatusEl.textContent = 'AKTIV';
+        charStatusEl.textContent = T('active');
       } else if (isUnlocked) {
         charStatusEl.className = 'char-status-badge badge-unlocked';
-        charStatusEl.textContent = 'AUSWÄHLEN';
+        charStatusEl.textContent = T('select');
       } else {
         charStatusEl.className = 'char-status-badge badge-locked';
-        charStatusEl.textContent = `AB ${char.unlockAt}M`;
+        charStatusEl.textContent = T('lockedAt', char.unlockAt);
       }
 
       document.getElementById('char-perk-el').textContent = char.perk ? '★ ' + char.perk : '';
@@ -1708,6 +1817,7 @@
     let enemyWarningShown = false;
     let shootingWarningShown = false;
     let bannerText = '';
+    let bannerColor = '#ff0055';
     let bannerTimer = 0;
 
     const PLATFORM_TYPES = {
@@ -2382,7 +2492,8 @@
         if (gameState !== 'playing' || this.shotCharges <= 0 || this.fireCooldown > 0) return;
         const target = findNearestEnemy();
         if (!target) {
-          bannerText = 'KEIN ZIEL IN REICHWEITE';
+          bannerText = T('noTarget');
+          bannerColor = '#ff0055';
           bannerTimer = 50;
           return;
         }
@@ -2516,13 +2627,15 @@
 
             if (score >= 800 && !enemyWarningShown) {
               enemyWarningShown = true;
-              bannerText = 'WARNUNG: FEUER-FLEDERMÄUSE GESICHTET!';
+              bannerText = T('batWarn');
+              bannerColor = '#ff0055';
               bannerTimer = 160;
               Sound.enemyWarning();
               screenShake = 8;
             } else if (score >= 1500 && !shootingWarningShown) {
               shootingWarningShown = true;
-              bannerText = 'ACHTUNG: GEGNER SCHIESSEN JETZT!';
+              bannerText = T('batShoot');
+              bannerColor = '#ff0055';
               bannerTimer = 160;
               Sound.enemyWarning();
               screenShake = 9;
@@ -3136,30 +3249,28 @@
         Sound.enemyHit();
         screenShake = 22;
         spawnDeathExplosion(player.x + player.w / 2, player.y, true);
-        finalCauseEl.textContent = 'KOLLISION MIT FEUER-FLEDERMAUS';
+        finalCauseEl.textContent = T('causeEnemy');
       } else if (reason === 'projectile') {
         Sound.enemyHit();
         screenShake = 24;
         spawnDeathExplosion(player.x + player.w / 2, player.y, true);
-        finalCauseEl.textContent = 'GETROFFEN VON PLASMA-GESCHOSS';
+        finalCauseEl.textContent = T('causeProjectile');
       } else {
         Sound.gameOver();
         screenShake = 18;
         spawnDeathExplosion(player.x + player.w / 2, player.y, false);
-        finalCauseEl.textContent = reason === 'fall'
-          ? 'ABSTURZ IN DIE TIEFE'
-          : 'VON DER LAVA VERSCHLUCKT';
+        finalCauseEl.textContent = reason === 'fall' ? T('causeFall') : T('causeLava');
       }
 
       setTimeout(() => {
         overlayTitle.innerHTML = 'GAME OVER';
-        overlaySubtitle.textContent = 'VERSUCHE ES NOCH EINMAL';
+        overlaySubtitle.innerHTML = T('tryAgain');
         charSelectContainer.style.display = 'block';
         updateCharSelectUI();
         statsBox.style.display = 'block';
         finalScoreEl.textContent = `${score} M`;
         finalHighscoreEl.textContent = `${highscore} M`;
-        startBtn.textContent = 'NOCH EINE RUNDE';
+        startBtn.textContent = T('again');
         overlay.classList.remove('hidden');
       }, 500);
     }
@@ -3223,10 +3334,12 @@
             spawnDust(it.x, it.y, 12, it.kind === 'shield' ? currentTheme().shield : currentTheme().shot);
             if (it.kind === 'shield') {
               player.shieldTimer = SHIELD_DURATION;
-              bannerText = 'SCHILD AKTIV!';
+              bannerText = T('shieldOn');
+              bannerColor = currentTheme().shield;
             } else {
               player.shotCharges = Math.min(MAX_SHOTS, player.shotCharges + SHOTS_PER_ITEM);
-              bannerText = isTouchDevice ? 'SCHUSS BEREIT! (BUTTON)' : 'SCHUSS BEREIT! (TASTE E)';
+              bannerText = isTouchDevice ? T('shotReadyTouch') : T('shotReadyKey');
+              bannerColor = currentTheme().shot;
               updateFireButton();
             }
             bannerTimer = 90;
@@ -3355,12 +3468,12 @@
       ctx.lineTo(hx - 3.5, hy);
       ctx.closePath();
       ctx.fill();
-      const bestText = `BEST: ${highscore} M`;
+      const bestText = `${T('best')}: ${highscore} M`;
       ctx.fillText(bestText, 30, 54);
       if (newRecordAchieved && gameState === 'playing') {
         ctx.fillStyle = '#00ffaa';
         setTextGlow('#00ffaa', 6);
-        ctx.fillText('NEU!', 36 + ctx.measureText(bestText).width, 54);
+        ctx.fillText(T('newRec'), 36 + ctx.measureText(bestText).width, 54);
       }
 
       const lavaDist = Math.max(0, Math.floor((player.y - lava.worldY) / 10));
@@ -3380,13 +3493,13 @@
         if (player.shieldTimer > 0) {
           ctx.fillStyle = th.shield;
           setTextGlow(th.shield, 6);
-          ctx.fillText(`SCHILD ${Math.ceil(player.shieldTimer / 60)}S`, 18, hy2);
+          ctx.fillText(T('shield', Math.ceil(player.shieldTimer / 60)), 18, hy2);
           hy2 += 16;
         }
         if (player.shotCharges > 0) {
           ctx.fillStyle = th.shot;
           setTextGlow(th.shot, 6);
-          ctx.fillText(`SCHUSS x${player.shotCharges}${isTouchDevice ? '' : ' [E]'}`, 18, hy2);
+          ctx.fillText(T('shots', player.shotCharges) + (isTouchDevice ? '' : ' [E]'), 18, hy2);
           hy2 += 16;
         }
       }
@@ -3439,9 +3552,9 @@
         ctx.lineJoin = 'round';
         ctx.strokeStyle = '#ff3300';
         ctx.shadowBlur = 0;
-        ctx.strokeText('KNAPP ENTKOMMEN!', 0, 0);
+        ctx.strokeText(T('closeCall'), 0, 0);
         ctx.fillStyle = '#ffffff';
-        ctx.fillText('KNAPP ENTKOMMEN!', 0, 0);
+        ctx.fillText(T('closeCall'), 0, 0);
         if (closeCallCount > 1) {
           ctx.font = '900 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
           ctx.fillStyle = '#ffcc00';
@@ -3456,10 +3569,7 @@
         const alpha = Math.min(1, bannerTimer / 25);
         ctx.globalAlpha = alpha;
 
-        const isUnlock = bannerText.includes('FREIGESCHALTET');
-        const isPerf = bannerText.startsWith('PERFORMANCE');
-        const isChrono = bannerText.startsWith('ZEITLUPE');
-        const bannerColor = isChrono ? '#00ff66' : isPerf ? '#00e5ff' : (isUnlock ? '#00ffaa' : '#ff0055');
+        // Farbe kommt jetzt direkt mit dem Banner (unabhängig von der Sprache)
 
         ctx.fillStyle = bannerColor;
         setTextGlow(bannerColor, 10);
@@ -3489,10 +3599,10 @@
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffffff';
         ctx.font = '900 38px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillText('PAUSE', WIDTH / 2, HEIGHT * 0.42);
+        ctx.fillText(T('pause'), WIDTH / 2, HEIGHT * 0.42);
         ctx.fillStyle = '#00e5ff';
         ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillText(isTouchDevice ? 'TIPPEN ZUM WEITERSPIELEN' : 'LEERTASTE ODER P ZUM WEITERSPIELEN', WIDTH / 2, HEIGHT * 0.42 + 32);
+        ctx.fillText(isTouchDevice ? T('resumeTouch') : T('resumeKey'), WIDTH / 2, HEIGHT * 0.42 + 32);
       }
 
       if (showFps) {
@@ -3554,7 +3664,8 @@
       if (lowQuality) return;
       lowQuality = true;
       setupRetina();
-      bannerText = 'PERFORMANCE-MODUS AKTIV';
+      bannerText = T('perf');
+      bannerColor = '#00e5ff';
       bannerTimer = 120;
     }
 
@@ -3596,6 +3707,44 @@
       requestAnimationFrame(frame);
     }
 
+    /* --------------------------------------------------------------------------
+       Sprache anwenden
+       -------------------------------------------------------------------------- */
+    function applyLang() {
+      document.documentElement.lang = currentLang;
+      if (gameState === 'gameover') {
+        overlaySubtitle.innerHTML = T('tryAgain');
+        startBtn.textContent = T('again');
+      } else {
+        overlaySubtitle.innerHTML = T('subtitle');
+        startBtn.textContent = T('play');
+      }
+      document.getElementById('char-select-header').textContent = T('chooseChar');
+      document.getElementById('lbl-height').textContent = T('height');
+      document.getElementById('lbl-record').textContent = T('record');
+      document.getElementById('controls-hint').innerHTML = T('controls');
+      document.getElementById('features-badge').innerHTML = T('features');
+      pauseBtn.title = T('tPause');
+      musicBtn.title = T('tMusic');
+      muteBtn.title = T('tSound');
+      charPrevBtn.title = T('tPrev');
+      charNextBtn.title = T('tNext');
+      document.querySelectorAll('#lang-switch button').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === currentLang);
+      });
+      updateCharSelectUI();
+    }
+
+    document.querySelectorAll('#lang-switch button').forEach(b => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentLang = b.dataset.lang;
+        store.set('lava_escape_lang', currentLang);
+        applyLang();
+      });
+    });
+
+    applyLang();
     initPlatforms();
     lava.reset();
     requestAnimationFrame(frame);
