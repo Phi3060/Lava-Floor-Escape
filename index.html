@@ -361,6 +361,47 @@
     }
 
     /* Mobile On-Screen Controls */
+    .touch-right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #touch-fire {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      opacity: 0.3;
+      border-color: rgba(255, 0, 85, 0.5);
+      color: #ff3366;
+    }
+
+    #touch-fire.ready {
+      opacity: 1;
+      background: rgba(255, 0, 85, 0.18);
+    }
+
+    #touch-fire:active, #touch-fire.active {
+      background: rgba(255, 0, 85, 0.5);
+      color: #ffffff;
+      transform: scale(0.94);
+    }
+
+    #fire-count {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 10px;
+      background: #ff0055;
+      color: #ffffff;
+      font: bold 11px/20px monospace;
+      text-align: center;
+    }
+
     #mobile-controls {
       position: absolute;
       bottom: 20px;
@@ -369,7 +410,7 @@
       padding: 0 22px;
       display: none;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-end;
       z-index: 5;
       pointer-events: none;
     }
@@ -461,10 +502,22 @@
           </svg>
         </div>
       </div>
+      <div class="touch-right">
+      <div class="touch-btn" id="touch-fire">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="7"></circle>
+          <line x1="12" y1="2" x2="12" y2="6"></line>
+          <line x1="12" y1="18" x2="12" y2="22"></line>
+          <line x1="2" y1="12" x2="6" y2="12"></line>
+          <line x1="18" y1="12" x2="22" y2="12"></line>
+        </svg>
+        <span id="fire-count">0</span>
+      </div>
       <div class="touch-btn" id="touch-jump">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="18 15 12 9 6 15"></polyline>
         </svg>
+      </div>
       </div>
     </div>
 
@@ -515,11 +568,12 @@
       <div class="controls-hint">
         STEUERUNG:<br>
         <span class="key-badge">&#9664;</span> <span class="key-badge">&#9654;</span> PFEILTASTEN / <span class="key-badge">A</span> <span class="key-badge">D</span> = BEWEGEN<br>
-        <span class="key-badge">LEERTASTE</span> / <span class="key-badge">W</span> = SPRINGEN
+        <span class="key-badge">LEERTASTE</span> / <span class="key-badge">W</span> = SPRINGEN<br>
+        <span class="key-badge">E</span> = SCHUSS (MIT ITEM)
       </div>
 
       <div class="badge-features">
-        FEINDE AB 800M &bull; PROJEKTILE AB 1500M &bull; 4 CHARAKTERE
+        FEINDE AB 800M &bull; ITEMS: SCHILD &amp; SCHUSS &bull; 4 CHARAKTERE
       </div>
     </div>
   </div>
@@ -665,7 +719,8 @@
     const svgSoundOff = document.getElementById('svg-sound-off');
     const mobileControls = document.getElementById('mobile-controls');
 
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    const isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    if (isTouchDevice) {
       mobileControls.style.display = 'flex';
     }
 
@@ -834,6 +889,81 @@
         osc.start(now);
         osc.stop(now + 0.7);
       },
+      pickup() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        [660, 880, 1320].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const start = ctx.currentTime + i * 0.05;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.2, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.12);
+        });
+      },
+      shieldBreak() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(900, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.25);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.28);
+      },
+      shoot(kind) {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        const cfg = {
+          cube:    ['square',   1500, 400, 0.12],
+          blaze:   ['sawtooth', 220,  90,  0.22],
+          phantom: ['sine',     520,  120, 0.25],
+          titan:   ['triangle', 300,  900, 0.18]
+        }[kind] || ['square', 1500, 400, 0.12];
+        osc.type = cfg[0];
+        osc.frequency.setValueAtTime(cfg[1], now);
+        osc.frequency.exponentialRampToValueAtTime(cfg[2], now + cfg[3]);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + cfg[3]);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + cfg[3]);
+      },
+      enemyKill() {
+        if (!audioEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      },
       newRecord() {
         if (!audioEnabled) return;
         const ctx = getAudioContext();
@@ -864,6 +994,7 @@
         e.preventDefault();
       }
       if (e.key.toLowerCase() === 'f' && !e.repeat) showFps = !showFps;
+      if (e.key.toLowerCase() === 'e' && !e.repeat && gameState === 'playing') player.fire();
       if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
       if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
       if (e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
@@ -906,6 +1037,29 @@
     bindTouchBtn('touch-right', 'right');
     bindTouchBtn('touch-jump', 'jump', true);
 
+    const fireBtn = document.getElementById('touch-fire');
+    const fireCountEl = document.getElementById('fire-count');
+    const firePress = (e) => {
+      e.preventDefault();
+      fireBtn.classList.add('active');
+      if (gameState === 'playing') player.fire();
+    };
+    const fireRelease = (e) => {
+      e.preventDefault();
+      fireBtn.classList.remove('active');
+    };
+    fireBtn.addEventListener('touchstart', firePress, { passive: false });
+    fireBtn.addEventListener('touchend', fireRelease, { passive: false });
+    fireBtn.addEventListener('touchcancel', fireRelease, { passive: false });
+    fireBtn.addEventListener('mousedown', firePress);
+    fireBtn.addEventListener('mouseup', fireRelease);
+
+    function updateFireButton() {
+      const n = player ? player.shotCharges : 0;
+      fireCountEl.textContent = n;
+      fireBtn.classList.toggle('ready', n > 0);
+    }
+
     /* --------------------------------------------------------------------------
        4 Charaktere & Freischaltung (Progression)
        -------------------------------------------------------------------------- */
@@ -919,19 +1073,19 @@
     // Eigene Welt pro Charakter (Plattformfarben, Hintergrund, Sprungfeder-Symbol)
     const THEMES = {
       cube: {
-        bg: '#070810', grid: 'rgba(0, 229, 255, 0.04)', accent: '#00f0ff', springIcon: 'arrow',
+        bg: '#070810', grid: 'rgba(0, 229, 255, 0.04)', accent: '#00f0ff', springIcon: 'arrow', shield: '#00e5ff', shot: '#3da5ff',
         plat: { normal: '#00e5ff', spring: '#00ff88', crumble: '#ffaa00', moving: '#ff00aa' }
       },
       blaze: {
-        bg: '#0e0604', grid: 'rgba(255, 110, 0, 0.05)', accent: '#ff7a00', springIcon: 'flame',
+        bg: '#0e0604', grid: 'rgba(255, 110, 0, 0.05)', accent: '#ff7a00', springIcon: 'flame', shield: '#ff8a00', shot: '#ff4400',
         plat: { normal: '#ff7a00', spring: '#ffd400', crumble: '#b5651d', moving: '#ff2d55' }
       },
       phantom: {
-        bg: '#0a0512', grid: 'rgba(190, 80, 255, 0.05)', accent: '#c04dff', springIcon: 'diamond',
+        bg: '#0a0512', grid: 'rgba(190, 80, 255, 0.05)', accent: '#c04dff', springIcon: 'diamond', shield: '#c04dff', shot: '#e040ff',
         plat: { normal: '#b14dff', spring: '#00ffd5', crumble: '#ff9f43', moving: '#ff4fd8' }
       },
       titan: {
-        bg: '#040b07', grid: 'rgba(0, 255, 110, 0.045)', accent: '#00ff66', springIcon: 'chevrons',
+        bg: '#040b07', grid: 'rgba(0, 255, 110, 0.045)', accent: '#00ff66', springIcon: 'chevrons', shield: '#00ff66', shot: '#aaff00',
         plat: { normal: '#00ff66', spring: '#ffee00', crumble: '#d4a017', moving: '#00c8ff' }
       }
     };
@@ -1424,6 +1578,294 @@
     let enemies = [];
 
     /* --------------------------------------------------------------------------
+       Items (Schild & Schuss), Spieler-Schüsse, Laser
+       -------------------------------------------------------------------------- */
+    let items = [];
+    let shots = [];
+    let beams = [];
+    let nextItemY = 0;
+
+    const ITEM_START_Y = 7600;        // Items erst kurz vor den Gegnern (~760m)
+    const SHIELD_DURATION = 60 * 20;  // 20 Sekunden
+    const SHOTS_PER_ITEM = 3;
+    const MAX_SHOTS = 5;
+
+    class Item {
+      constructor(x, y, kind) {
+        this.x = x;          // Mitte
+        this.y = y;          // Weltposition (Mitte)
+        this.kind = kind;    // 'shield' | 'shot'
+        this.t = Math.random() * 10;
+      }
+
+      update() {
+        this.t += 0.08;
+      }
+
+      draw(cameraY) {
+        const sy = HEIGHT - (this.y - cameraY) + Math.sin(this.t) * 3;
+        if (sy < -30 || sy > HEIGHT + 30) return;
+        const th = currentTheme();
+        const color = this.kind === 'shield' ? th.shield : th.shot;
+
+        drawGlow(color, this.x, sy, 22);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.beginPath();
+        ctx.arc(this.x, sy, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        if (this.kind === 'shield') {
+          // Schild-Symbol
+          ctx.beginPath();
+          ctx.moveTo(this.x, sy - 6);
+          ctx.lineTo(this.x + 5, sy - 4);
+          ctx.lineTo(this.x + 4, sy + 2);
+          ctx.lineTo(this.x, sy + 6);
+          ctx.lineTo(this.x - 4, sy + 2);
+          ctx.lineTo(this.x - 5, sy - 4);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // Fadenkreuz-Symbol
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 4.5, 0, Math.PI * 2);
+          ctx.moveTo(this.x, sy - 8); ctx.lineTo(this.x, sy - 3);
+          ctx.moveTo(this.x, sy + 3); ctx.lineTo(this.x, sy + 8);
+          ctx.moveTo(this.x - 8, sy); ctx.lineTo(this.x - 3, sy);
+          ctx.moveTo(this.x + 3, sy); ctx.lineTo(this.x + 8, sy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Zielsuche: nächster sichtbarer Gegner
+    function findNearestEnemy() {
+      const px = player.x + player.w / 2;
+      const py = player.y + player.h / 2;
+      let best = null;
+      let bestDist = 520;
+      for (const e of enemies) {
+        const sy = HEIGHT - (e.y - cameraY);
+        if (sy < 0 || sy > HEIGHT) continue;
+        const d = Math.hypot(e.x + e.w / 2 - px, e.y + e.h / 2 - py);
+        if (d < bestDist) {
+          bestDist = d;
+          best = e;
+        }
+      }
+      return best;
+    }
+
+    function killEnemy(index) {
+      const e = enemies[index];
+      if (!e) return;
+      enemies.splice(index, 1);
+      const cx = e.x + e.w / 2;
+      const cy = e.y + e.h / 2;
+      const colors = ['#ff0055', '#ff3377', '#ffee00', '#ff5500'];
+      const count = lowQuality ? 10 : 20;
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 5 + 1.5;
+        addParticle(cx, cy, Math.cos(a) * sp, Math.sin(a) * sp, colors[i % colors.length], Math.random() * 4 + 2.5, 32);
+      }
+      Sound.enemyKill();
+      screenShake = Math.max(screenShake, 6);
+    }
+
+    // Zielsuchende Geschosse (Feuerball, Void-Kugel, Energie-Scheibe)
+    class PlayerShot {
+      constructor(x, y, target, kind) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.kind = kind;
+        this.life = 110;
+        const dx = target.x + target.w / 2 - x;
+        const dy = target.y + target.h / 2 - y;
+        const d = Math.hypot(dx, dy) || 1;
+        this.speed = 8.5;
+        this.vx = (dx / d) * this.speed;
+        this.vy = (dy / d) * this.speed;
+      }
+
+      update() {
+        if (this.target && enemies.includes(this.target)) {
+          const dx = this.target.x + this.target.w / 2 - this.x;
+          const dy = this.target.y + this.target.h / 2 - this.y;
+          const d = Math.hypot(dx, dy) || 1;
+          this.vx += ((dx / d) * this.speed - this.vx) * 0.25;
+          this.vy += ((dy / d) * this.speed - this.vy) * 0.25;
+        }
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life--;
+
+        if (Math.random() < (lowQuality ? 0.3 : 0.7)) {
+          const c = { blaze: ['#ff5500', '#ffcc00'], phantom: ['#d000ff', '#5a00a0'], titan: ['#00ff66', '#aaff00'] }[this.kind] || ['#ffffff', '#ffffff'];
+          addParticle(this.x, this.y, (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.2, c[Math.random() < 0.5 ? 0 : 1], 2.5 + Math.random() * 2, 16);
+        }
+      }
+
+      draw(cameraY) {
+        const sy = HEIGHT - (this.y - cameraY);
+        if (sy < -20 || sy > HEIGHT + 20) return;
+
+        if (this.kind === 'blaze') {
+          drawGlow('#ff5500', this.x, sy, 18);
+          ctx.fillStyle = '#ff5500';
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff0aa';
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (this.kind === 'phantom') {
+          drawGlow('#d000ff', this.x, sy, 18);
+          ctx.fillStyle = '#1c002e';
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#e040ff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          // Titan: rotierende Energie-Scheibe
+          drawGlow('#00ff66', this.x, sy, 18);
+          const rot = this.life * 0.4;
+          ctx.strokeStyle = '#aaff00';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 7, rot, rot + Math.PI * 1.4);
+          ctx.stroke();
+          ctx.fillStyle = '#e8fffa';
+          ctx.beginPath();
+          ctx.arc(this.x, sy, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawBeams(cameraY) {
+      for (const b of beams) {
+        const a = b.life / b.maxLife;
+        const y1 = HEIGHT - (b.y1 - cameraY);
+        const y2 = HEIGHT - (b.y2 - cameraY);
+        ctx.globalAlpha = a * 0.35;
+        ctx.strokeStyle = '#3da5ff';
+        ctx.lineWidth = 10 * a + 2;
+        ctx.beginPath();
+        ctx.moveTo(b.x1, y1);
+        ctx.lineTo(b.x2, y2);
+        ctx.stroke();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 4 * a + 1;
+        ctx.stroke();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Schild in der Element-Optik des Charakters
+    function drawPlayerShield(cameraY) {
+      if (player.shieldTimer <= 0) return;
+      if (player.shieldTimer < 120 && Math.floor(player.shieldTimer / 6) % 2 === 0) return; // blinkt kurz vor Ende
+      const cx = player.x + player.w / 2;
+      const cy = HEIGHT - (player.y - cameraY) - player.h / 2;
+      const t = player.animTime;
+      const r = 25;
+      const id = selectedCharId;
+
+      ctx.save();
+      if (id === 'blaze') {
+        // Flammenring
+        ctx.fillStyle = 'rgba(255, 120, 0, 0.12)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2 + t * 0.03;
+          const len = 6 + Math.sin(t * 0.4 + k * 1.7) * 3;
+          ctx.fillStyle = k % 2 ? '#ffcc00' : '#ff6a00';
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a - 0.18) * r, cy + Math.sin(a - 0.18) * r);
+          ctx.lineTo(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len));
+          ctx.lineTo(cx + Math.cos(a + 0.18) * r, cy + Math.sin(a + 0.18) * r);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.strokeStyle = '#ff8a00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (id === 'phantom') {
+        // Rotierender Void-Ring
+        ctx.fillStyle = 'rgba(28, 0, 46, 0.35)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.setLineDash([6, 5]);
+        ctx.lineDashOffset = -t * 0.6;
+        ctx.strokeStyle = '#c04dff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.setLineDash([3, 7]);
+        ctx.lineDashOffset = t * 0.4;
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (id === 'titan') {
+        // Panzer-Segmente
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.1)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 4;
+        for (let k = 0; k < 4; k++) {
+          const a = t * 0.04 + k * Math.PI / 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, a, a + Math.PI / 2 - 0.35);
+          ctx.stroke();
+        }
+      } else {
+        // Neo Cube: Hexagon-Energiefeld
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.12)';
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = t * 0.02 + k * Math.PI / 3;
+          const px = cx + Math.cos(a) * r;
+          const py = cy + Math.sin(a) * r;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /* --------------------------------------------------------------------------
        Spieler (4 Neon-Skins)
        -------------------------------------------------------------------------- */
     class Player {
@@ -1453,6 +1895,45 @@
         this.tilt = 0;
         this.trail = [];
         this.blink = 0;
+        // Fähigkeiten
+        this.shieldTimer = 0;
+        this.shotCharges = 0;
+        this.fireCooldown = 0;
+        this.invuln = 0;
+      }
+
+      breakShield() {
+        this.shieldTimer = 0;
+        this.invuln = 60;
+        Sound.shieldBreak();
+        screenShake = Math.max(screenShake, 8);
+        spawnDust(this.x + this.w / 2, this.y + this.h / 2, 16, currentTheme().shield);
+      }
+
+      fire() {
+        if (gameState !== 'playing' || this.shotCharges <= 0 || this.fireCooldown > 0) return;
+        const target = findNearestEnemy();
+        if (!target) {
+          bannerText = 'KEIN ZIEL IN REICHWEITE';
+          bannerTimer = 50;
+          return;
+        }
+        this.shotCharges--;
+        this.fireCooldown = 15;
+        updateFireButton();
+
+        const cx = this.x + this.w / 2;
+        const cy = this.y + this.h / 2;
+        const kind = selectedCharId;
+        Sound.shoot(kind);
+
+        if (kind === 'cube') {
+          // Blauer Laser trifft sofort
+          beams.push({ x1: cx, y1: cy, x2: target.x + target.w / 2, y2: target.y + target.h / 2, life: 14, maxLife: 14 });
+          killEnemy(enemies.indexOf(target));
+        } else {
+          shots.push(new PlayerShot(cx, cy, target, kind));
+        }
       }
 
       triggerJump() {
@@ -1552,6 +2033,9 @@
         }
 
         this.updateAnim();
+        if (this.shieldTimer > 0) this.shieldTimer--;
+        if (this.fireCooldown > 0) this.fireCooldown--;
+        if (this.invuln > 0) this.invuln--;
 
         if (this.y > highestWorldY) {
           highestWorldY = this.y;
@@ -1621,6 +2105,7 @@
       }
 
       draw(cameraY) {
+        if (this.invuln > 0 && Math.floor(this.invuln / 4) % 2 === 0) return;
         const screenY = HEIGHT - (this.y - cameraY);
         const cx = this.x + this.w / 2;
         let cy = screenY - this.h / 2;
@@ -1883,6 +2368,10 @@
       platforms = [];
       enemies = [];
       projectiles = [];
+      items = [];
+      shots = [];
+      beams = [];
+      nextItemY = ITEM_START_Y;
       platforms.push(new Platform(WIDTH / 2 - 70, 40, 140, PLATFORM_TYPES.NORMAL));
       nextPlatformY = 110;
       while (nextPlatformY < HEIGHT * 1.5) {
@@ -1907,12 +2396,30 @@
 
       platforms.push(new Platform(x, nextPlatformY, width, type));
 
-      if (Math.random() < 0.34 && width < 105) {
-        const altX = (x < WIDTH / 2)
-          ? Math.random() * (WIDTH / 2 - 40) + WIDTH / 2
-          : Math.random() * (WIDTH / 2 - 75) + 15;
+      // Zweite Plattform in derselben Reihe – nur mit genug Abstand,
+      // und nie neben einer beweglichen Plattform (sonst fährt sie hinein)
+      if (type !== PLATFORM_TYPES.MOVING && Math.random() < 0.34 && width < 105) {
         const altW = Math.random() * 25 + 65;
-        platforms.push(new Platform(altX, nextPlatformY + (Math.random() * 16 - 8), altW, PLATFORM_TYPES.NORMAL));
+        const gap = 30;
+        let minX, maxX;
+        if (x + width / 2 < WIDTH / 2) {
+          minX = x + width + gap;
+          maxX = WIDTH - 15 - altW;
+        } else {
+          minX = 15;
+          maxX = x - gap - altW;
+        }
+        if (maxX >= minX) {
+          const altX = minX + Math.random() * (maxX - minX);
+          platforms.push(new Platform(altX, nextPlatformY + (Math.random() * 16 - 8), altW, PLATFORM_TYPES.NORMAL));
+        }
+      }
+
+      // Items nur ab und zu (alle ~150–300m), auf normalen Plattformen
+      if (type === PLATFORM_TYPES.NORMAL && nextPlatformY >= nextItemY && Math.random() < 0.3) {
+        const kind = Math.random() < 0.5 ? 'shield' : 'shot';
+        items.push(new Item(x + width / 2, nextPlatformY + 14 + 22, kind));
+        nextItemY = nextPlatformY + 1500 + Math.random() * 1500;
       }
 
       if (score >= 800 && Math.random() < 0.35) {
@@ -1927,9 +2434,9 @@
        -------------------------------------------------------------------------- */
     const lava = {
       worldY: -120,
-      baseSpeed: 0.85,
+      baseSpeed: 1.0,
       waveTimer: 0,
-      currentSpeed: 0.85,
+      currentSpeed: 1.0,
       grad: null,
       glowGrad: null,
 
@@ -1940,7 +2447,7 @@
       },
 
       update() {
-        const speedBonus = Math.min(score * 0.0022, 2.5);
+        const speedBonus = Math.min(score * 0.0028, 2.8);
         this.currentSpeed = this.baseSpeed + speedBonus;
         this.worldY += this.currentSpeed;
         this.waveTimer += 0.075;
@@ -2035,6 +2542,7 @@
       initPlatforms();
       lava.reset();
       canvas.style.background = currentTheme().bg;
+      updateFireButton();
     }
 
     function triggerGameOver(reason = 'lava') {
@@ -2092,18 +2600,71 @@
 
         for (let plat of platforms) plat.update();
 
-        for (let enemy of enemies) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const enemy = enemies[i];
           enemy.update(player.y, player.x);
-          if (enemy.checkCollision(player)) {
+          if (player.invuln <= 0 && enemy.checkCollision(player)) {
+            if (player.shieldTimer > 0) {
+              player.breakShield();
+              killEnemy(i);
+              continue;
+            }
             triggerGameOver('enemy');
             break;
           }
         }
 
+        // Items einsammeln
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          it.update();
+          const d = Math.hypot(it.x - (player.x + player.w / 2), it.y - (player.y + player.h / 2));
+          if (d < 24) {
+            items.splice(i, 1);
+            Sound.pickup();
+            spawnDust(it.x, it.y, 12, it.kind === 'shield' ? currentTheme().shield : currentTheme().shot);
+            if (it.kind === 'shield') {
+              player.shieldTimer = SHIELD_DURATION;
+              bannerText = 'SCHILD AKTIV!';
+            } else {
+              player.shotCharges = Math.min(MAX_SHOTS, player.shotCharges + SHOTS_PER_ITEM);
+              bannerText = isTouchDevice ? 'SCHUSS BEREIT! (BUTTON)' : 'SCHUSS BEREIT! (TASTE E)';
+              updateFireButton();
+            }
+            bannerTimer = 90;
+          }
+        }
+
+        // Eigene Schüsse
+        for (let i = shots.length - 1; i >= 0; i--) {
+          const sh = shots[i];
+          sh.update();
+          let hit = false;
+          for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (Math.hypot(sh.x - (e.x + e.w / 2), sh.y - (e.y + e.h / 2)) < 18) {
+              killEnemy(j);
+              hit = true;
+              break;
+            }
+          }
+          if (hit || sh.life <= 0) shots.splice(i, 1);
+        }
+
+        for (let i = beams.length - 1; i >= 0; i--) {
+          if (--beams[i].life <= 0) beams.splice(i, 1);
+        }
+
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const proj = projectiles[i];
           proj.update();
-          if (proj.checkCollision(player)) {
+          if (player.invuln <= 0 && proj.checkCollision(player)) {
+            if (player.shieldTimer > 0) {
+              player.breakShield();
+              projectiles[i] = projectiles[projectiles.length - 1];
+              projectiles.pop();
+              continue;
+            }
             triggerGameOver('projectile');
             break;
           }
@@ -2119,6 +2680,7 @@
 
         removeBelow(platforms, cameraY - 120);
         removeBelow(enemies, cameraY - 120);
+        removeBelow(items, cameraY - 120);
 
         if (player.y <= lava.worldY + 12) {
           triggerGameOver('lava');
@@ -2205,6 +2767,25 @@
       ctx.textAlign = 'left';
       ctx.fillText(`LAVA: +${lavaDist}M [${lava.currentSpeed.toFixed(1)}X]`, 18, 54);
 
+      // Fähigkeiten-Anzeige
+      if (gameState === 'playing') {
+        const th = currentTheme();
+        let hy2 = 72;
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'left';
+        if (player.shieldTimer > 0) {
+          ctx.fillStyle = th.shield;
+          setTextGlow(th.shield, 6);
+          ctx.fillText(`SCHILD ${Math.ceil(player.shieldTimer / 60)}S`, 18, hy2);
+          hy2 += 16;
+        }
+        if (player.shotCharges > 0) {
+          ctx.fillStyle = th.shot;
+          setTextGlow(th.shot, 6);
+          ctx.fillText(`SCHUSS x${player.shotCharges}${isTouchDevice ? '' : ' [E]'}`, 18, hy2);
+        }
+      }
+
       if (newRecordAchieved && gameState === 'playing') {
         ctx.fillStyle = '#00ffaa';
         setTextGlow('#00ffaa', 6);
@@ -2269,11 +2850,17 @@
 
       drawBackground(cameraY);
       for (let plat of platforms) plat.draw(cameraY);
+      for (let it of items) it.draw(cameraY);
       for (let enemy of enemies) enemy.draw(cameraY);
+      for (let sh of shots) sh.draw(cameraY);
+      drawBeams(cameraY);
       for (let proj of projectiles) proj.draw(cameraY);
       for (let p of particles) p.draw(cameraY);
       ctx.globalAlpha = 1;
-      if (gameState !== 'gameover' || screenShake > 2) player.draw(cameraY);
+      if (gameState !== 'gameover' || screenShake > 2) {
+        player.draw(cameraY);
+        if (gameState === 'playing') drawPlayerShield(cameraY);
+      }
       lava.draw(cameraY);
       drawHUD();
 
