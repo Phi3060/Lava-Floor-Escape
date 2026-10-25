@@ -329,7 +329,7 @@
     }
 
     /* Vektor-Audio-Schalter (Reines SVG) */
-    #mute-btn {
+    #mute-btn, #music-btn {
       position: absolute;
       top: 14px;
       right: 14px;
@@ -348,13 +348,15 @@
       transition: background 0.2s, transform 0.15s, border-color 0.2s;
     }
 
-    #mute-btn:hover {
+    #mute-btn:hover, #music-btn:hover {
       background: rgba(0, 229, 255, 0.15);
       border-color: #00e5ff;
       transform: scale(1.06);
     }
 
-    #mute-btn svg {
+    #music-btn { right: 62px; }
+
+    #mute-btn svg, #music-btn svg {
       width: 20px;
       height: 20px;
       stroke: currentColor;
@@ -471,6 +473,21 @@
 <body>
 
   <div id="game-wrapper">
+    <!-- Musik Schalter -->
+    <div id="music-btn" title="Musik an/aus">
+      <svg id="svg-music-on" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+      </svg>
+      <svg id="svg-music-off" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+        <line x1="2" y1="2" x2="22" y2="22"></line>
+      </svg>
+    </div>
+
     <!-- Vektor Audio Schalter (SVG) -->
     <div id="mute-btn" title="Audio Umschalten">
       <svg id="svg-sound-on" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -747,7 +764,12 @@
       svgSoundOn.style.display = audioEnabled ? 'block' : 'none';
       svgSoundOff.style.display = audioEnabled ? 'none' : 'block';
       muteBtn.style.color = audioEnabled ? '#00e5ff' : '#888899';
-      if (audioEnabled) getAudioContext();
+      if (audioEnabled) {
+        getAudioContext();
+        if (gameState === 'playing') Music.start(selectedCharId);
+      } else {
+        Music.stop(0.1);
+      }
     });
 
     const Sound = {
@@ -983,6 +1005,232 @@
         });
       }
     };
+
+    /* --------------------------------------------------------------------------
+       Musik: im Code erzeugt (kein Urheberrecht, keine Dateien)
+       Eigener Track pro Charakter, wird schneller wenn die Lava nahe ist
+       -------------------------------------------------------------------------- */
+    const TRACKS = {
+      // Neo Cube: Synthwave, A-Moll
+      cube: {
+        bpm: 118, root: 57, chords: [0, -4, 3, -2], quality: ['m', 'M', 'M', 'M'],
+        kick: [0, 4, 8, 12], snare: [4, 12], snareVol: 0.16, hats: [2, 6, 10, 14],
+        bass: [0, 2, 4, 6, 8, 10, 12, 14], bassLen: 1.6, bassWave: 'square', bassCut: 700,
+        lead: [0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1, 2, 3],
+        leadLen: 0.9, leadWave: 'triangle', leadVol: 0.1, leadCut: 0, leadShift: 0, echo: false
+      },
+      // Blaze Orb: treibend & aggressiv, E-Phrygisch
+      blaze: {
+        bpm: 136, root: 52, chords: [0, 0, 1, -2], quality: ['m', 'm', 'M', 'M'],
+        kick: [0, 4, 8, 10, 12], snare: [4, 12], snareVol: 0.2, hats: [0, 2, 4, 6, 8, 10, 12, 14],
+        bass: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], bassLen: 0.8, bassWave: 'sawtooth', bassCut: 900,
+        lead: [0, null, null, 1, null, null, 2, null, null, null, 3, null, 2, null, 1, null],
+        leadLen: 2.5, leadWave: 'sawtooth', leadVol: 0.07, leadCut: 2200, leadShift: 0, echo: false
+      },
+      // Void Phantom: düster & schwebend, D-Moll
+      phantom: {
+        bpm: 96, root: 50, chords: [0, 1, -2, -6], quality: ['m', 'M', 'M', 'M'],
+        kick: [0, 10], snare: [8], snareVol: 0.1, hats: [],
+        bass: [0, 8], bassLen: 7, bassWave: 'sine', bassCut: 0,
+        lead: [4, null, null, 2, null, null, null, 1, null, null, 3, null, null, null, 0, null],
+        leadLen: 3, leadWave: 'sine', leadVol: 0.12, leadCut: 0, leadShift: 12, echo: true
+      },
+      // Chrono Titan: heroisch & mechanisch, G-Dur
+      titan: {
+        bpm: 124, root: 55, chords: [0, -3, 5, 7], quality: ['M', 'm', 'M', 'M'],
+        kick: [0, 4, 8, 12], snare: [4, 12], snareVol: 0.18, hats: [2, 6, 10, 14],
+        bass: [0, 3, 6, 8, 11, 14], bassLen: 1.5, bassWave: 'square', bassCut: 500,
+        lead: [0, null, 1, null, 2, null, 3, null, 2, null, 1, null, 2, null, 3, 4],
+        leadLen: 1.6, leadWave: 'square', leadVol: 0.06, leadCut: 1800, leadShift: 0, echo: false
+      }
+    };
+
+    function mtof(m) {
+      return 440 * Math.pow(2, (m - 69) / 12);
+    }
+
+    let noiseBuffer = null;
+    function getNoiseBuffer(ctx) {
+      if (noiseBuffer) return noiseBuffer;
+      noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      return noiseBuffer;
+    }
+
+    function synthTone(ctx, dest, t, freq, dur, wave, vol, cutoff) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = wave;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      if (cutoff) {
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.value = cutoff;
+        osc.connect(f);
+        f.connect(gain);
+      } else {
+        osc.connect(gain);
+      }
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+
+    function synthNoise(ctx, dest, t, dur, vol, highpass) {
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      const f = ctx.createBiquadFilter();
+      f.type = 'highpass';
+      f.frequency.value = highpass;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f);
+      f.connect(gain);
+      gain.connect(dest);
+      src.start(t, Math.random() * 0.5);
+      src.stop(t + dur + 0.02);
+    }
+
+    function synthKick(ctx, dest, t, vol) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + 0.18);
+    }
+
+    const Music = {
+      enabled: store.get('lava_escape_music', '1') === '1',
+      playing: false,
+      track: null,
+      step: 0,
+      nextTime: 0,
+      timer: null,
+      intensity: 0,
+      gain: null,
+      volume: 0.4,
+
+      start(trackId) {
+        if (!audioEnabled || !this.enabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (!this.gain) {
+          this.gain = ctx.createGain();
+          this.gain.gain.value = 0;
+          this.gain.connect(ctx.destination);
+        }
+        this.track = TRACKS[trackId] || TRACKS.cube;
+        const now = ctx.currentTime;
+        this.gain.gain.cancelScheduledValues(now);
+        this.gain.gain.setValueAtTime(Math.max(this.gain.gain.value, 0.0001), now);
+        this.gain.gain.linearRampToValueAtTime(this.volume, now + 0.5);
+        if (!this.playing) {
+          this.step = 0;
+          this.nextTime = now + 0.08;
+        }
+        this.playing = true;
+        if (!this.timer) this.timer = setInterval(() => this.schedule(), 25);
+      },
+
+      stop(fade = 0.4) {
+        this.playing = false;
+        if (this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
+        if (this.gain && audioCtx) {
+          const now = audioCtx.currentTime;
+          this.gain.gain.cancelScheduledValues(now);
+          this.gain.gain.setValueAtTime(this.gain.gain.value, now);
+          this.gain.gain.linearRampToValueAtTime(0, now + fade);
+        }
+      },
+
+      schedule() {
+        const ctx = audioCtx;
+        if (!ctx || !this.playing || !this.track) return;
+        // Nach Pausen (z.B. Tab im Hintergrund) nicht alle verpassten Noten auf einmal spielen
+        if (this.nextTime < ctx.currentTime - 0.05) this.nextTime = ctx.currentTime + 0.05;
+        while (this.nextTime < ctx.currentTime + 0.12) {
+          this.playStep(this.step, this.nextTime);
+          const bpm = this.track.bpm * (1 + this.intensity * 0.22);
+          this.nextTime += 60 / bpm / 4;
+          this.step = (this.step + 1) % 64;
+        }
+      },
+
+      playStep(step, t) {
+        const ctx = audioCtx;
+        const tr = this.track;
+        const out = this.gain;
+        const bar = Math.floor(step / 16) % 4;
+        const s = step % 16;
+        const root = tr.root + tr.chords[bar];
+        const iv = tr.quality[bar] === 'm' ? [0, 3, 7, 12, 15] : [0, 4, 7, 12, 16];
+        const stepDur = 60 / (tr.bpm * (1 + this.intensity * 0.22)) / 4;
+
+        // Schlagzeug
+        if (tr.kick.includes(s)) synthKick(ctx, out, t, 0.5);
+        if (tr.snare.includes(s)) synthNoise(ctx, out, t, 0.12, tr.snareVol, 1200);
+        if (tr.hats.includes(s)) synthNoise(ctx, out, t, 0.035, 0.05, 7000);
+        // Mehr Hi-Hats, wenn die Lava nahe ist
+        if (this.intensity > 0.4 && s % 2 === 1) synthNoise(ctx, out, t, 0.03, 0.045 * this.intensity, 8000);
+
+        // Bass
+        if (tr.bass.includes(s)) {
+          synthTone(ctx, out, t, mtof(root - 12), stepDur * tr.bassLen, tr.bassWave, 0.22, tr.bassCut);
+        }
+
+        // Melodie (eine Oktave höher bei großer Gefahr)
+        const li = tr.lead[s];
+        if (li !== null && li !== undefined) {
+          const m = root + 12 + tr.leadShift + iv[li % iv.length] + (this.intensity > 0.75 ? 12 : 0);
+          synthTone(ctx, out, t, mtof(m), stepDur * tr.leadLen, tr.leadWave, tr.leadVol, tr.leadCut);
+          if (tr.echo) {
+            synthTone(ctx, out, t + stepDur * 3, mtof(m), stepDur * tr.leadLen, tr.leadWave, tr.leadVol * 0.4, tr.leadCut);
+          }
+        }
+      }
+    };
+
+    // Musik-Schalter
+    const musicBtn = document.getElementById('music-btn');
+    const svgMusicOn = document.getElementById('svg-music-on');
+    const svgMusicOff = document.getElementById('svg-music-off');
+
+    function updateMusicBtn() {
+      svgMusicOn.style.display = Music.enabled ? 'block' : 'none';
+      svgMusicOff.style.display = Music.enabled ? 'none' : 'block';
+      musicBtn.style.color = Music.enabled ? '#00e5ff' : '#888899';
+    }
+    updateMusicBtn();
+
+    musicBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Music.enabled = !Music.enabled;
+      store.set('lava_escape_music', Music.enabled ? '1' : '0');
+      updateMusicBtn();
+      if (Music.enabled && gameState === 'playing') Music.start(selectedCharId);
+      else Music.stop(0.2);
+    });
+
+    // Musik im Hintergrund pausieren (z.B. Handy gesperrt / App gewechselt)
+    document.addEventListener('visibilitychange', () => {
+      if (!audioCtx) return;
+      if (document.hidden) audioCtx.suspend();
+      else if (audioEnabled) audioCtx.resume();
+    });
 
     /* --------------------------------------------------------------------------
        Input Management (Pfeiltasten & Leertaste)
@@ -2543,11 +2791,14 @@
       lava.reset();
       canvas.style.background = currentTheme().bg;
       updateFireButton();
+      Music.intensity = 0;
+      Music.start(selectedCharId);
     }
 
     function triggerGameOver(reason = 'lava') {
       if (gameState === 'gameover') return;
       gameState = 'gameover';
+      Music.stop(0.8);
 
       if (reason === 'enemy') {
         Sound.enemyHit();
@@ -2592,6 +2843,11 @@
       if (gameState === 'playing') {
         player.update();
         lava.update();
+
+        // Musik-Intensität: je näher die Lava, desto schneller/intensiver
+        const lavaGap = player.y - lava.worldY;
+        const musicTarget = Math.max(0, Math.min(1, 1 - (lavaGap - 60) / 360));
+        Music.intensity += (musicTarget - Music.intensity) * 0.03;
 
         const targetCamY = player.y - HEIGHT * 0.42;
         if (targetCamY > cameraY) {
